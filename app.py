@@ -1,22 +1,20 @@
-from flask import Flask, request, render_template
-import tensorflow as tf
-import numpy as np
-from PIL import Image
 import os
+import torch
+import torchvision.transforms as transforms
+from PIL import Image
+from flask import Flask, request, render_template
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "static/uploads"
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+# Load model
+model = torch.load("model/best_model.pth", map_location=torch.device("cpu"))
+model.eval()
 
-# Load trained model
-model = tf.keras.models.load_model("model/best_model.h5")
-
-def preprocess_image(image_path):
-    img = Image.open(image_path).resize((224,224))
-    img = np.array(img)/255.0
-    img = np.expand_dims(img, axis=0)
-    return img
+# Image preprocessing
+transform = transforms.Compose([
+    transforms.Resize((224,224)),
+    transforms.ToTensor()
+])
 
 @app.route("/", methods=["GET","POST"])
 def index():
@@ -24,19 +22,19 @@ def index():
 
     if request.method == "POST":
         file = request.files["image"]
-        filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-        file.save(filepath)
 
-        img = preprocess_image(filepath)
+        img = Image.open(file).convert("RGB")
+        img = transform(img).unsqueeze(0)
 
-        pred = model.predict(img)
+        with torch.no_grad():
+            output = model(img)
+            pred = torch.argmax(output, dim=1)
 
-        if pred[0][0] > 0.5:
-            prediction = "Cancer Detected"
-        else:
-            prediction = "No Cancer Detected"
+        prediction = f"Prediction: {pred.item()}"
 
     return render_template("index.html", prediction=prediction)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
