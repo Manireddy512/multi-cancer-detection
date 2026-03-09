@@ -1,5 +1,6 @@
 flask
-tensorflow-cpu
+torch
+torchvision
 pillow
 numpy
 gunicorn
