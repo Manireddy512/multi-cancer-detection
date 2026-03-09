@@ -1,40 +1,85 @@
-import os
 import torch
-import torchvision.transforms as transforms
+import torch.nn as nn
+import torch.nn.functional as F
+from flask import Flask, request, jsonify
 from PIL import Image
-from flask import Flask, request, render_template
+import torchvision.transforms as transforms
+import torchvision.models as models
 
 app = Flask(__name__)
 
-# Load model
-model = torch.load("model/best_model.pth", map_location=torch.device("cpu"))
+# -----------------------------
+# CONFIG
+# -----------------------------
+MODEL_PATH = "model/best_model.pth"
+NUM_CLASSES = 7
+
+CLASS_NAMES = ["akiec","bcc","bkl","df","mel","nv","vasc"]
+
+# -----------------------------
+# BUILD MODEL (same as training)
+# -----------------------------
+def build_model():
+
+    model = models.mobilenet_v2(weights=None)
+    in_features = model.classifier[1].in_features
+    model.classifier[1] = nn.Linear(in_features, NUM_CLASSES)
+
+    return model
+
+
+# -----------------------------
+# LOAD MODEL
+# -----------------------------
+model = build_model()
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
 model.eval()
 
-# Image preprocessing
+# -----------------------------
+# IMAGE TRANSFORM
+# -----------------------------
 transform = transforms.Compose([
     transforms.Resize((224,224)),
     transforms.ToTensor()
 ])
 
-@app.route("/", methods=["GET","POST"])
-def index():
-    prediction = ""
-
-    if request.method == "POST":
-        file = request.files["image"]
-
-        img = Image.open(file).convert("RGB")
-        img = transform(img).unsqueeze(0)
-
-        with torch.no_grad():
-            output = model(img)
-            pred = torch.argmax(output, dim=1)
-
-        prediction = f"Prediction: {pred.item()}"
-
-    return render_template("index.html", prediction=prediction)
+# -----------------------------
+# ROUTES
+# -----------------------------
+@app.route("/")
+def home():
+    return jsonify({"message": "Skin Cancer Detection API Running"})
 
 
+@app.route("/predict", methods=["POST"])
+def predict():
+
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
+
+    file = request.files["image"]
+
+    try:
+        image = Image.open(file).convert("RGB")
+    except:
+        return jsonify({"error": "Invalid image"}), 400
+
+    img = transform(image).unsqueeze(0)
+
+    with torch.no_grad():
+        outputs = model(img)
+        probs = F.softmax(outputs, dim=1)
+
+        confidence, pred = torch.max(probs, 1)
+
+    return jsonify({
+        "prediction": CLASS_NAMES[pred.item()],
+        "confidence": float(confidence.item())
+    })
+
+
+# -----------------------------
+# RUN SERVER
+# -----------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
