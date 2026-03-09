@@ -32,7 +32,7 @@ def build_model():
 # LOAD MODEL
 # -----------------------------
 model = build_model()
-model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu", weights_only=False))
 model.eval()
 
 # -----------------------------
