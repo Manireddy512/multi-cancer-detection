@@ -10,7 +10,7 @@ UPLOAD_FOLDER = "static/uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 # Load trained model
-model = tf.keras.models.load_model("model/best_model (1).pth")
+model = tf.keras.models.load_model("model/best_model.h5")
 
 def preprocess_image(image_path):
     img = Image.open(image_path).resize((224,224))
